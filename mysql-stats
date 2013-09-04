@@ -1,0 +1,263 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+# version 20120426
+#
+# Copyright (C) 2011-2012  Glen Pitt-Pladdy
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#
+#
+# See: http://www.pitt-pladdy.com/blog/_20120426-165939_0100_MySQL_Performance_Graphs_on_Cacti_via_SNMP/
+
+
+
+# need give this user the following priveledges:
+#	CREATE USER 'monitor'@'localhost' IDENTIFIED BY 'monitorpass';
+# Don't need anything for:
+#	SHOW GLOBAL STATUS
+#	SHOW VARIABLES
+#	SHOW PROCESSLIST
+# GRANT PROCESS ON *.* TO 'monitor'@'localhost';
+# Need PROCESS for:
+#	SHOW ENGINE INNODB STATUS
+# Need SUPER,REPLICATION CLIENT for:
+#	SHOW SLAVE STATUS
+#	SHOW MASTER STATUS
+# Need SUPER for:
+#	SHOW MASTER LOGS
+#	FLUSH PRIVILEGES;
+#
+#
+
+my $CONFIG = '/etc/snmp/mysql-stats.conf';
+
+my %credentials;
+if ( -f $CONFIG ) {
+	open my $inc, '<', $CONFIG or die "$0: FATAL - can't read config \"$CONFIG\": $!\n";
+	while ( defined ( my $line = <$inc> ) ) {
+		chomp $line;
+		if ( $line =~ /^#/ ) { next; }
+		if ( $line =~ /^([\w_]+):\s*([\w:]+)$/ ) {
+			$credentials{$1} = $2;
+		}
+	}
+	close $inc;
+}
+
+my $cachetime = 240;	# 5 mins
+# turn it into days
+$cachetime /= 86400;
+
+
+
+sub usage {
+	die "usage: $0 <path to cache file> <variable name> [more variable names.....]\n";
+}
+
+sub returnvars {
+	my $data = shift;
+	for ( my $i = 1; $i <= $#ARGV; ++$i ) {
+		if ( defined $$data{$ARGV[$i]} ) {
+			print $$data{$ARGV[$i]}."\n";
+		} else {
+			print "U\n";
+		}
+	}
+}
+
+
+
+
+if ( $#ARGV < 1 ) { usage (); }
+
+# read in last cache if available
+my %existing;
+if ( -f $ARGV[0] ) {
+	open CACHE, '<', $ARGV[0]
+		or die "FATAL - can't read \"$ARGV[0]\": $!\n";
+	
+	while ( defined ( my $line = <CACHE> ) ) {
+		chomp $line;
+		if ( $line !~ /^([\w_]+):\s*(-?[\d\.]+)$/ and $line !~ /^([\w_]+):\s*(-?[\d\.]+e[+\-][\d\.]+)$/ ) {
+			die "FATAL - don't understand line \"$line\"\n";
+		}
+		$existing{$1} = $2;
+	}
+	close CACHE;
+}
+
+# check if we have a fresh cache file
+if ( -f $ARGV[0] and -M $ARGV[0] < $cachetime ) {
+	returnvars ( \%existing );
+	exit 0;
+}
+
+my %status;
+use DBI;
+my $dbh = DBI->connect (
+		$credentials{'data_source'},
+		$credentials{'username'},
+		$credentials{'password'}
+	);
+my $variables = $dbh->prepare ( "SHOW GLOBAL STATUS" );
+$variables->execute();
+while ( my @fields = $variables->fetchrow_array() ) {
+	if ( $fields[1] !~ /^\d+$/ ) { next; }
+	$status{lc $fields[0]} = $fields[1];
+}
+$variables = $dbh->prepare ( "SHOW VARIABLES" );
+$variables->execute();
+while ( my @fields = $variables->fetchrow_array() ) {
+	if ( $fields[1] !~ /^\d+$/ ) { next; }
+	$status{lc $fields[0]} = $fields[1];
+}
+#$variables = $dbh->prepare ( "SHOW SLAVE STATUS" );
+#$variables->execute();
+#while ( my @fields = $variables->fetchrow_array() ) {
+#	if ( $fields[1] !~ /^\d+$/ ) { next; }
+#	$status{lc $fields[0]} = $fields[1];
+#}
+# possibly SELECT GREATEST(0, UNIX_TIMESTAMP() - UNIX_TIMESTAMP(ts) - 1) S delay FROM $heartbeat WHERE id = 1
+#$variables = $dbh->prepare ( "SHOW MASTER STATUS" );
+#$variables->execute();
+#while ( my @fields = $variables->fetchrow_array() ) {
+#	if ( $fields[1] !~ /^\d+$/ ) { next; }
+#	$status{lc $fields[0]} = $fields[1];
+#}
+# should this be SHOW MASTER STATUS?
+#$variables = $dbh->prepare ( "SHOW MASTER LOGS" );
+#$variables->execute();
+#while ( my @fields = $variables->fetchrow_array() ) {
+#	if ( $fields[1] !~ /^\d+$/ ) { next; }
+#	$status{lc $fields[0]} = $fields[1];
+#}
+$variables = $dbh->prepare ( "SHOW PROCESSLIST" );
+$variables->execute();
+while ( my @fields = $variables->fetchrow_array() ) {
+	if ( $fields[1] !~ /^\d+$/ ) { next; }
+	$status{lc $fields[0]} = $fields[1];
+}
+$variables = $dbh->prepare ( "SHOW ENGINE INNODB STATUS" );
+$variables->execute();
+while ( my @fields = $variables->fetchrow_array() ) {
+	if ( $fields[1] !~ /^\d+$/ ) { next; }
+	$status{lc $fields[0]} = $fields[1];
+}
+# query time histogram: SELECT `count`, total * 1000000 AS total FROM INFORMATION_SCHEMA.QUERY_RESPONSE_TIME WHERE `time` <> 'TOO LONG'
+#############################################################################
+# calculate derived values and check tuning
+#############################################################################
+# key_buffer_size tuning - the ratio is useful, but use cautiously, ideally low
+# see http://www.mysqlperformanceblog.com/2010/02/28/why-you-should-ignore-mysqls-key-cache-hit-ratio/
+if ( defined $status{'key_reads'} and defined $status{'key_read_requests'}
+	and defined $existing{'key_reads'} and defined $existing{'key_read_requests'} ) {
+	if ( $status{'key_read_requests'} > $existing{'key_read_requests'} ) {
+		$status{'_key_miss_ratio'} = ( $existing{'key_reads'} - $status{'key_reads' } )
+						/ ( $existing{'key_read_requests'} - $status{'key_read_requests'} );
+		$status{'_key_hit_ratio'} = 1 - $status{'_key_miss_ratio'};
+	} elsif ( defined $existing{'_key_miss_ratio'} ) {
+		# just roll on with the last value if it exists
+		$status{'_key_miss_ratio'} = $existing{'_key_miss_ratio'};
+		$status{'_key_hit_ratio'} = 1 - $existing{'_key_miss_ratio'};
+	}
+
+}
+#############################################################################
+# innodb_buffer_pool_size
+# see http://www.mysqlperformanceblog.com/2007/11/03/choosing-innodb_buffer_pool_size/
+# innodb_flush_method=O_DIRECT	???
+# echo 0 > /proc/sys/vm/swappiness	???
+if ( defined $status{'innodb_buffer_pool_reads'} and defined $status{'innodb_buffer_pool_read_requests'}
+	and defined $existing{'innodb_buffer_pool_reads'} and defined $existing{'innodb_buffer_pool_read_requests'} ) {
+	if ( $status{'innodb_buffer_pool_read_requests'} > $existing{'innodb_buffer_pool_read_requests'} ) {
+		$status{'_innodb_buffer_pool_miss_ratio'} = ( $existing{'innodb_buffer_pool_reads'} - $status{'innodb_buffer_pool_reads'} )
+						/ ( $existing{'innodb_buffer_pool_read_requests'} - $status{'innodb_buffer_pool_read_requests'} );
+		$status{'_innodb_buffer_pool_hit_ratio'} = 1 - $status{'_innodb_buffer_pool_miss_ratio'};
+	} elsif ( defined $existing{'_innodb_buffer_pool_miss_ratio'} ) {
+		# just roll on with the last value if it exists
+		$status{'_innodb_buffer_pool_miss_ratio'} = $existing{'_innodb_buffer_pool_miss_ratio'};
+		$status{'_innodb_buffer_pool_hit_ratio'} = 1 - $status{'_innodb_buffer_pool_miss_ratio'};
+	}
+
+}
+
+#############################################################################
+# innodb_additional_mem_pool_size
+#############################################################################
+# innodb_log_file_size
+#############################################################################
+# innodb_log_buffer_size
+#############################################################################
+# innodb_flush_log_at_trx_commit
+#############################################################################
+# table_cache
+#############################################################################
+# thread_cache
+#############################################################################
+# query_cache_size
+# hit ratio - can be useful but needs to be taken in context
+if ( defined $status{'qcache_inserts'} and defined $status{'qcache_hits'}
+	and defined $existing{'qcache_inserts'} and defined $existing{'qcache_hits'} ) {
+	if ( $status{'qcache_hits'} > $existing{'qcache_hits'} ) {
+		$status{'_qcache_miss_ratio'} = ( $existing{'qcache_inserts'} - $status{'qcache_inserts'} )
+						/ ( $existing{'qcache_hits'} - $status{'qcache_hits'}
+							+ $existing{'qcache_inserts'} - $status{'qcache_inserts'} );
+#		$status{'_qcache_miss_ratio'} = ( $existing{'qcache_inserts'} - $status{'qcache_inserts' } )
+#						/ ( $existing{'qcache_hits'} - $status{'qcache_hits'}
+#							+ $existing{'qcache_inserts'} - $status{'qcache_inserts' } );
+		$status{'_qcache_hit_ratio'} = 1 - $status{'_qcache_miss_ratio'};
+	} elsif ( defined $existing{'_qcache_miss_ratio'} ) {
+		# just roll on with the last value if it exists
+		$status{'_qcache_miss_ratio'} = $existing{'_qcache_miss_ratio'};
+		$status{'_qcache_hit_ratio'} = 1 - $existing{'_qcache_miss_ratio'};
+	}
+}
+#############################################################################
+# sort_buffer_size ???
+# join_buffer_size ???
+# read_buffer_size ???
+# read_rnd_buffer_size ???
+
+
+#############################################################################
+if ( defined $status{'qcache_total_blocks'} and defined $status{'qcache_free_blocks'} ) {
+	$status{'_qcache_used_blocks'} = $status{'qcache_total_blocks'} - $status{'qcache_free_blocks'};
+}
+if ( defined $status{'query_cache_size'} and defined $status{'qcache_free_memory'} ) {
+	$status{'_qcache_used_memory'} = $status{'query_cache_size'} - $status{'qcache_free_memory'};
+}
+#############################################################################
+
+# save new data
+open CACHE, '>', $ARGV[0].'TMP'
+	or die "FATAL - can't write \"$ARGV[0].TMP\": $!\n";
+chmod 0600, $ARGV[0].'TMP' or die "FATAL - can't chmod \"$ARGV[0].TMP\": $!\n";
+foreach my $variable (keys %status) {
+	print CACHE "$variable: $status{$variable}\n";
+}
+close CACHE;
+rename $ARGV[0].'TMP', $ARGV[0] or die "FATAL - can't rename \"$ARGV[0].TMP\" to \"$ARGV[0]\": $!\n";
+
+# output request
+returnvars ( \%status );
+
+
+
+
+
+
+
+

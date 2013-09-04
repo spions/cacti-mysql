@@ -1,0 +1,27 @@
+1) Log into MySQL and execute the following (changing "secret" as appropriate) to give the script permission to monitor:
+
+mysql -uroot -p
+CREATE USER 'monitor'@'localhost' IDENTIFIED BY 'secret';
+GRANT PROCESS ON *.* TO 'monitor'@'localhost';
+FLUSH PRIVILEGES;
+
+2) In order to read all these variables from MySQL we need credentials. 
+These are stored in /etc/snmpd/mysql-stats.conf 
+by default and you can modify the script if you need to change that. 
+
+3) This one is simply an extension script for snmpd that grabs (and caches) the data when called. 
+Assuming you put this extension script in /etc/snmp and have a cache directory for my extensions 
+of /etc/snmp/mysql_cache/ (as described in previous articles), you can add the following to your 
+/etc/snmp/snmpd.conf file and then restart snmpd:
+
+extend mysqlqcache /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache _qcache_miss_ratio _qcache_hit_ratio qcache_hits qcache_inserts qcache_total_blocks qcache_free_blocks _qcache_used_blocks query_cache_size qcache_free_memory _qcache_used_memory qcache_queries_in_cache
+extend mysqlbufferpool /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache _innodb_buffer_pool_miss_ratio _innodb_buffer_pool_hit_ratio innodb_buffer_pool_reads innodb_buffer_pool_read_requests innodb_buffer_pool_write_requests
+extend mysqlbufferpoolstat /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache innodb_buffer_pool_pages_total innodb_buffer_pool_pages_data innodb_buffer_pool_pages_free innodb_buffer_pool_pages_dirty innodb_buffer_pool_pages_misc
+extend mysqlinnodbrows /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache innodb_rows_read innodb_rows_deleted innodb_rows_updated innodb_rows_inserted
+extend mysqlkeycache /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache _key_miss_ratio _key_hit_ratio key_reads key_read_requests
+extend mysqlcomm /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache questions com_select com_delete com_insert com_update com_replace com_load com_delete_multi com_insert_select com_update_multi com_replace_select
+extend mysqlsort /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache sort_rows sort_range sort_merge_passes sort_scan
+extend mysqlselects /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache select_full_join select_full_range_join select_range select_range_check select_scan
+
+
+Original: https://www.pitt-pladdy.com/blog/_20120426-165939_0100_MySQL_Performance_Graphs_on_Cacti_via_SNMP/
