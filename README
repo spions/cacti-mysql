@@ -1,6 +1,9 @@
 INTRODUCTION
 ============
 
+Russian version of this manual is available at 
+http://shurshun.ru/cacti-monitoring-mysql/
+
 This is a set of templates for monitoring MySQL servers through SNMP protocol with Cacti. 
 
 It is based on the knowledge and techniques of project designs:
@@ -31,13 +34,13 @@ INSTALLATION
    Mariadb can create a user with a blank password. It needs to be changed.
 	SET PASSWORD FOR 'monitor'@'localhost' = PASSWORD('secret');
 
-2) In order to read all these variables from MySQL we need credentials. 
+3) In order to read all these variables from MySQL we need credentials. 
    Change the login and password /etc/snmpd/mysql-stats.conf to access the MYSQL
 
         cd /etc/snmp/
 	wget https://raw.github.com/spions/cacti-mysql/master/mysql-stats.conf
 
-3) Create cache dir, download mysql-stats and change snmpd.conf.
+4) Create cache dir, download mysql-stats and change snmpd.conf.
 
         cd /etc/snmp/
 	mkdir /etc/snmp/mysql_cache
@@ -45,7 +48,6 @@ INSTALLATION
        
 	wget https://raw.github.com/spions/cacti-mysql/master/mysql-stats
         chmod 755 mysql-stats
-
 
    This one is simply an extension script for snmpd that grabs (and caches) the data when called. 
    Assuming you put this extension script in /etc/snmp and have a cache directory for my extensions 
@@ -61,7 +63,7 @@ INSTALLATION
 	extend mysqlsort /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache sort_rows sort_range sort_merge_passes sort_scan
 	extend mysqlselects /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache select_full_join select_full_range_join select_range select_range_check select_scan
 
-4) Download and Import templates "cacti_host_template_mysql.xml" on Cacti monitoring host.
+5) Download and Import templates "cacti_host_template_mysql.xml" on Cacti monitoring host.
 
    You have to import templates using Cacti web interface. In the Cacti web interface’s Console tab, click on the "Import Templates" 
    link in the left sidebar. Browse to the directory containing the unpacked templates, select the XML file for the 
@@ -83,7 +85,7 @@ INSTALLATION
 		** GPRINT Preset
 		...
 
-5) Creating Graphs.
+6) Creating Graphs.
    In Cacti’s Console tab, browse to the "Devices" link in the sidebar and click on the device you’d like to graph.
 
    The third item from the top of the screen should say Host Template. Change this to the name of the template you 
