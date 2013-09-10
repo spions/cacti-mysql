@@ -61,32 +61,52 @@ INSTALLATION
 	extend mysqlsort /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache sort_rows sort_range sort_merge_passes sort_scan
 	extend mysqlselects /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache select_full_join select_full_range_join select_range select_range_check select_scan
 
-4) On Cacti host, download cacti host template and inport to 
-wget https://raw.github.com/spions/cacti-mysql/master/cacti_host_template_mysql.xml
+4) Download and Import templates "cacti_host_template_mysql.xml" on Cacti monitoring host.
 
+   You have to import templates using Cacti web interface. In the Cacti web interface’s Console tab, click on the "Import Templates" 
+   link in the left sidebar. Browse to the directory containing the unpacked templates, select the XML file for the 
+   templates (cacti_host_template_mysql.xml)you’re  installing, and submit the form.
 
+   	Console->Import/Export->Import Templates
 
+   Or simply import templates from the command line:
 
+	wget https://raw.github.com/spions/cacti-mysql/master/cacti_host_template_mysql.xml
+
+	[cacti-test-host]# php /dir_to_cacti/cacti/cli/import_template.php --filename=/dir_to_template/cacti_host_template_mysql.xml --with-user-rras='1:2:3:4'
+
+		using RRA Daily (5 Minute Average)
+		using RRA Weekly (30 Minute Average)
+		using RRA Monthly (2 Hour Average)
+		using RRA Yearly (1 Day Average)
+		Read 234723 bytes of XML data
+		** GPRINT Preset
+		...
+
+5) Creating Graphs.
+   In Cacti’s Console tab, browse to the "Devices" link in the sidebar and click on the device you’d like to graph.
+
+   The third item from the top of the screen should say Host Template. Change this to the name of the template you 
+   imported, such as "mysql". Scroll to the bottom of the page and click the Save button.
+
+   After the page loads, click on the "Create Graphs for this Host" link at the top of the page.
 
 Sample Graphs and Description
 =============================
 
-Graphics are made by analogy with the project "Percona MySQL Monitoring Template for Cacti"
-http://www.percona.com/doc/percona-monitoring-plugins/cacti/mysql-templates.html
+  Graphics are made by analogy with the project "Percona MySQL Monitoring Template for Cacti"
+  http://www.percona.com/doc/percona-monitoring-plugins/cacti/mysql-templates.html
 
-The following sample graphs demonstrate how the data is presented.
+  The following sample graphs demonstrate how the data is presented.
 
-MySQL Command Counters.
-The MySQL Command Counters graph shows counters for various MySQL commands. These are derived from the Com_ counters from SHOW STATUS. 
-If there is a change in the graph, it indicates that something changed in the application.
-
+  MySQL Command Counters.
+  The MySQL Command Counters graph shows counters for various MySQL commands. These are derived from the Com_ counters from SHOW STATUS. 
+  If there is a change in the graph, it indicates that something changed in the application.
 
 CONTRIBUTING
 ============
 
-  This is an open-source project, and everyone is welcome to participate.  Just
-join the mailing list and introduce yourself.  Commit access to SVN, editing
-permission on the wiki, and anything else you need will be happily and speedily
-granted if you ask.
+  This is an open-source project, and everyone is welcome to participate.  Just join the mailing list and introduce yourself.  
+  Commit access to SVN, editing permission on the wiki, and anything else you need will be happily and speedily granted if you ask.
 
 
