@@ -1,27 +1,92 @@
-1) Log into MySQL and execute the following (changing "secret" as appropriate) to give the script permission to monitor:
+INTRODUCTION
+============
 
-mysql -uroot -p
-CREATE USER 'monitor'@'localhost' IDENTIFIED BY 'secret';
-GRANT PROCESS ON *.* TO 'monitor'@'localhost';
-FLUSH PRIVILEGES;
+This is a set of templates for monitoring MySQL servers through SNMP protocol with Cacti. 
+
+It is based on the knowledge and techniques of project designs:
+
+1) MySQL Performance Graphs on Cacti via SNMP
+   https://www.pitt-pladdy.com/blog/_20120426-165939_0100_MySQL_Performance_Graphs_on_Cacti_via_SNMP/
+2) Percona MySQL Monitoring Template for Cacti
+   http://www.percona.com/software/percona-monitoring-plugins
+3) masterzen/mysql-snmp
+   https://github.com/masterzen/mysql-snmp
+4) Cofyc/cacti-templates
+   https://github.com/Cofyc/cacti-templates
+
+INSTALLATION
+============
+
+1) Download "cacti-mysql" project.
+   https://github.com/spions/cacti-mysql/archive/master.zip
+
+2) Log into MySQL on monitoring server and execute the following (changing "secret" as appropriate) 
+   to give the script permission to monitor:
+
+   [monitoring-server]# mysql -uroot -p
+	CREATE USER 'monitor'@'localhost' IDENTIFIED BY 'secret';
+	GRANT PROCESS ON *.* TO 'monitor'@'localhost';
+	FLUSH PRIVILEGES;
+
+   Mariadb can create a user with a blank password. It needs to be changed.
+	SET PASSWORD FOR 'monitor'@'localhost' = PASSWORD('secret');
 
 2) In order to read all these variables from MySQL we need credentials. 
-These are stored in /etc/snmpd/mysql-stats.conf 
-by default and you can modify the script if you need to change that. 
+   Change the login and password /etc/snmpd/mysql-stats.conf to access the MYSQL
 
-3) This one is simply an extension script for snmpd that grabs (and caches) the data when called. 
-Assuming you put this extension script in /etc/snmp and have a cache directory for my extensions 
-of /etc/snmp/mysql_cache/ (as described in previous articles), you can add the following to your 
-/etc/snmp/snmpd.conf file and then restart snmpd:
+        cd /etc/snmp/
+	wget https://raw.github.com/spions/cacti-mysql/master/mysql-stats.conf
 
-extend mysqlqcache /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache _qcache_miss_ratio _qcache_hit_ratio qcache_hits qcache_inserts qcache_total_blocks qcache_free_blocks _qcache_used_blocks query_cache_size qcache_free_memory _qcache_used_memory qcache_queries_in_cache
-extend mysqlbufferpool /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache _innodb_buffer_pool_miss_ratio _innodb_buffer_pool_hit_ratio innodb_buffer_pool_reads innodb_buffer_pool_read_requests innodb_buffer_pool_write_requests
-extend mysqlbufferpoolstat /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache innodb_buffer_pool_pages_total innodb_buffer_pool_pages_data innodb_buffer_pool_pages_free innodb_buffer_pool_pages_dirty innodb_buffer_pool_pages_misc
-extend mysqlinnodbrows /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache innodb_rows_read innodb_rows_deleted innodb_rows_updated innodb_rows_inserted
-extend mysqlkeycache /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache _key_miss_ratio _key_hit_ratio key_reads key_read_requests
-extend mysqlcomm /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache questions com_select com_delete com_insert com_update com_replace com_load com_delete_multi com_insert_select com_update_multi com_replace_select
-extend mysqlsort /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache sort_rows sort_range sort_merge_passes sort_scan
-extend mysqlselects /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache select_full_join select_full_range_join select_range select_range_check select_scan
+3) Create cache dir, download mysql-stats and change snmpd.conf.
+
+        cd /etc/snmp/
+	mkdir /etc/snmp/mysql_cache
+	chmod 777 /etc/snmp/mysql_cache
+       
+	wget https://raw.github.com/spions/cacti-mysql/master/mysql-stats
+        chmod 755 mysql-stats
 
 
-Original: https://www.pitt-pladdy.com/blog/_20120426-165939_0100_MySQL_Performance_Graphs_on_Cacti_via_SNMP/
+   This one is simply an extension script for snmpd that grabs (and caches) the data when called. 
+   Assuming you put this extension script in /etc/snmp and have a cache directory for my extensions 
+   of /etc/snmp/mysql_cache/ (as described in previous articles), you can add the following to your 
+   /etc/snmp/snmpd.conf file and then restart snmpd:
+
+	extend mysqlqcache /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache _qcache_miss_ratio _qcache_hit_ratio qcache_hits qcache_inserts qcache_total_blocks qcache_free_blocks _qcache_used_blocks query_cache_size qcache_free_memory _qcache_used_memory qcache_queries_in_cache
+	extend mysqlbufferpool /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache _innodb_buffer_pool_miss_ratio _innodb_buffer_pool_hit_ratio innodb_buffer_pool_reads innodb_buffer_pool_read_requests innodb_buffer_pool_write_requests
+	extend mysqlbufferpoolstat /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache innodb_buffer_pool_pages_total innodb_buffer_pool_pages_data innodb_buffer_pool_pages_free innodb_buffer_pool_pages_dirty innodb_buffer_pool_pages_misc
+	extend mysqlinnodbrows /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache innodb_rows_read innodb_rows_deleted innodb_rows_updated innodb_rows_inserted
+	extend mysqlkeycache /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache _key_miss_ratio _key_hit_ratio key_reads key_read_requests
+	extend mysqlcomm /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache questions com_select com_delete com_insert com_update com_replace com_load com_delete_multi com_insert_select com_update_multi com_replace_select
+	extend mysqlsort /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache sort_rows sort_range sort_merge_passes sort_scan
+	extend mysqlselects /etc/snmp/mysql-stats /etc/snmp/mysql_cache/cache select_full_join select_full_range_join select_range select_range_check select_scan
+
+4) On Cacti host, download cacti host template and inport to 
+wget https://raw.github.com/spions/cacti-mysql/master/cacti_host_template_mysql.xml
+
+
+
+
+
+Sample Graphs and Description
+=============================
+
+Graphics are made by analogy with the project "Percona MySQL Monitoring Template for Cacti"
+http://www.percona.com/doc/percona-monitoring-plugins/cacti/mysql-templates.html
+
+The following sample graphs demonstrate how the data is presented.
+
+MySQL Command Counters.
+The MySQL Command Counters graph shows counters for various MySQL commands. These are derived from the Com_ counters from SHOW STATUS. 
+If there is a change in the graph, it indicates that something changed in the application.
+
+
+CONTRIBUTING
+============
+
+  This is an open-source project, and everyone is welcome to participate.  Just
+join the mailing list and introduce yourself.  Commit access to SVN, editing
+permission on the wiki, and anything else you need will be happily and speedily
+granted if you ask.
+
+
